@@ -1,3 +1,4 @@
+// Package routing defines exchanges and data types for peril
 package routing
 
 const (
