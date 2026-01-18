@@ -3,8 +3,6 @@ package main
 import (
 	"fmt"
 	"log"
-	"os"
-	"os/signal"
 
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/gamelogic"
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/pubsub"
@@ -40,7 +38,39 @@ func main() {
 		log.Fatal("no chan or queue womp womp", err)
 	}
 
-	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, os.Interrupt)
-	<-signalChan
+	gameState := gamelogic.NewGameState(username)
+gameloop:
+	for {
+		inputs := gamelogic.GetInput()
+		if len(inputs) == 0 {
+			fmt.Println("No valid input, try again")
+			continue
+		}
+
+		command := inputs[0]
+		var err error
+		switch command {
+		case "spawn":
+			err = gameState.CommandSpawn(inputs)
+		case "move":
+			_, err = gameState.CommandMove(inputs)
+			fmt.Println("move successful!")
+		case "status":
+			gameState.CommandStatus()
+		case "help":
+			gamelogic.PrintClientHelp()
+		case "spam":
+			fmt.Println("Spamming not allowed yet")
+		case "quit":
+			gamelogic.PrintQuit()
+			break gameloop
+		default:
+			fmt.Println("No valid input, try again")
+			continue
+		}
+		if err != nil {
+			log.Println("not good:", err)
+			break
+		}
+	}
 }
