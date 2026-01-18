@@ -29,10 +29,25 @@ func main() {
 		log.Fatal(err)
 	}
 
+	_, queue, err := pubsub.DeclareAndBind(
+		rabbit,
+		routing.ExchangePerilTopic,
+		routing.GameLogSlug,
+		routing.GameLogSlug+".*",
+		pubsub.DurableQueueType,
+	)
+	if err != nil {
+		log.Fatalf("could not subscribe to pause: %v", err)
+	}
+	fmt.Printf("Queue %v declared and bound!\n", queue.Name)
+
+gameloop:
 	for {
 		inputs := gamelogic.GetInput()
-		firstInput := inputs[0]
-		if firstInput == "pause" {
+		command := inputs[0]
+		switch command {
+		case "pause":
+
 			err = pubsub.PublishJSON(
 				channel,
 				routing.ExchangePerilDirect,
@@ -43,7 +58,7 @@ func main() {
 			if err != nil {
 				log.Fatal(err)
 			}
-		} else if firstInput == "resume" {
+		case "resume":
 			err = pubsub.PublishJSON(
 				channel,
 				routing.ExchangePerilDirect,
@@ -54,10 +69,10 @@ func main() {
 			if err != nil {
 				log.Fatal(err)
 			}
-		} else if firstInput == "quit" {
+		case "quit":
 			fmt.Println("Quitting the game...")
-			break
-		} else {
+			break gameloop
+		default:
 			fmt.Println("I don't understand the command")
 		}
 	}
