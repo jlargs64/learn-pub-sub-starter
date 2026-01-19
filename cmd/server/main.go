@@ -47,7 +47,6 @@ gameloop:
 		command := inputs[0]
 		switch command {
 		case "pause":
-
 			err = pubsub.PublishJSON(
 				channel,
 				routing.ExchangePerilDirect,

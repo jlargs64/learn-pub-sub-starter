@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 )
@@ -76,6 +77,17 @@ func DeclareAndBind(
 	if err != nil {
 		return nil, amqp.Queue{}, err
 	}
+
+	err = channel.QueueBind(
+		queue.Name,
+		key,
+		exchange,
+		false,
+		nil,
+	)
+	if err != nil {
+		return nil, amqp.Queue{}, err
+	}
 	return channel, queue, nil
 }
 
@@ -84,8 +96,47 @@ func SubscribeJSON[T any](
 	exchange,
 	queueName,
 	key string,
-	queueType SimpleQueueType, // an enum to represent "durable" or "transient"
+	queueType SimpleQueueType,
 	handler func(T),
 ) error {
+	subChan, queue, err := DeclareAndBind(
+		conn,
+		exchange,
+		queueName,
+		key,
+		queueType,
+	)
+	if err != nil {
+		return err
+	}
+
+	deliveryChan, err := subChan.Consume(
+		queue.Name,
+		"",
+		false,
+		false,
+		false,
+		false,
+		nil,
+	)
+	if err != nil {
+		return err
+	}
+
+	go func() {
+		for delivery := range deliveryChan {
+			var body T
+			if err := json.Unmarshal(delivery.Body, &body); err != nil {
+				log.Println("warning err in sub:", err)
+			}
+
+			handler(body)
+
+			if err := delivery.Ack(false); err != nil {
+				log.Println("warning err in sub:", err)
+			}
+		}
+	}()
+
 	return nil
 }

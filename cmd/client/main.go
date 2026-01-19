@@ -26,21 +26,22 @@ func main() {
 	if err != nil {
 		log.Fatal("bad username", err)
 	}
+	gameState := gamelogic.NewGameState(username)
 
-	_, _, err = pubsub.DeclareAndBind(
+	err = pubsub.SubscribeJSON(
 		rabbit,
 		routing.ExchangePerilDirect,
-		routing.PauseKey+"."+username,
-		routing.PauseKey,
+		"pause."+username, routing.PauseKey,
 		pubsub.TransientQueueType,
+		handlerPause(gameState),
 	)
 	if err != nil {
 		log.Fatal("no chan or queue womp womp", err)
 	}
 
-	gameState := gamelogic.NewGameState(username)
 gameloop:
 	for {
+		defer fmt.Print("> ")
 		inputs := gamelogic.GetInput()
 		if len(inputs) == 0 {
 			fmt.Println("No valid input, try again")
@@ -48,12 +49,19 @@ gameloop:
 		}
 
 		command := inputs[0]
-		var err error
 		switch command {
 		case "spawn":
 			err = gameState.CommandSpawn(inputs)
+			if err != nil {
+				fmt.Println(err)
+				continue
+			}
 		case "move":
 			_, err = gameState.CommandMove(inputs)
+			if err != nil {
+				fmt.Println(err)
+				continue
+			}
 			fmt.Println("move successful!")
 		case "status":
 			gameState.CommandStatus()
@@ -68,9 +76,14 @@ gameloop:
 			fmt.Println("No valid input, try again")
 			continue
 		}
-		if err != nil {
-			log.Println("not good:", err)
-			break
-		}
+	}
+}
+
+func handlerPause(gs *gamelogic.GameState) func(routing.PlayingState) {
+	return func(ps routing.PlayingState) {
+		defer fmt.Println("> ")
+		gs.HandlePause(
+			ps,
+		)
 	}
 }
