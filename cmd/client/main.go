@@ -31,9 +31,22 @@ func main() {
 	err = pubsub.SubscribeJSON(
 		rabbit,
 		routing.ExchangePerilDirect,
-		"pause."+username, routing.PauseKey,
+		"pause."+username,
+		routing.PauseKey,
 		pubsub.TransientQueueType,
 		handlerPause(gameState),
+	)
+	if err != nil {
+		log.Fatal("no chan or queue womp womp", err)
+	}
+
+	err = pubsub.SubscribeJSON(
+		rabbit,
+		routing.ExchangePerilDirect,
+		"move."+username,
+		string(routing.ArmyMovesPrefix),
+		pubsub.TransientQueueType,
+		handlerMove(gameState),
 	)
 	if err != nil {
 		log.Fatal("no chan or queue womp womp", err)
@@ -79,11 +92,25 @@ gameloop:
 	}
 }
 
-func handlerPause(gs *gamelogic.GameState) func(routing.PlayingState) {
-	return func(ps routing.PlayingState) {
+func handlerPause(gs *gamelogic.GameState) func(routing.PlayingState) pubsub.AckType {
+	return func(ps routing.PlayingState) pubsub.AckType {
 		defer fmt.Println("> ")
 		gs.HandlePause(
 			ps,
 		)
+		return pubsub.Ack
+	}
+}
+
+func handlerMove(gs *gamelogic.GameState) func(move gamelogic.ArmyMove) pubsub.AckType {
+	return func(move gamelogic.ArmyMove) pubsub.AckType {
+		defer fmt.Println("> ")
+		result := gs.HandleMove(
+			move,
+		)
+		if result == gamelogic.MoveOutComeSafe || result == gamelogic.MoveOutcomeMakeWar {
+			return pubsub.Ack
+		}
+		return pubsub.NackDiscard
 	}
 }

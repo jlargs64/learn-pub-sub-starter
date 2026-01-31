@@ -91,13 +91,21 @@ func DeclareAndBind(
 	return channel, queue, nil
 }
 
+type AckType int
+
+const (
+	Ack AckType = iota
+	NackRequeue
+	NackDiscard
+)
+
 func SubscribeJSON[T any](
 	conn *amqp.Connection,
 	exchange,
 	queueName,
 	key string,
 	queueType SimpleQueueType,
-	handler func(T),
+	handler func(T) AckType,
 ) error {
 	subChan, queue, err := DeclareAndBind(
 		conn,
@@ -126,14 +134,29 @@ func SubscribeJSON[T any](
 	go func() {
 		for delivery := range deliveryChan {
 			var body T
+			var ackErr error
 			if err := json.Unmarshal(delivery.Body, &body); err != nil {
 				log.Println("warning err in sub:", err)
+				ackErr = delivery.Nack(false, true)
+				log.Println("the was an error sending the ack during unmarshal err:", ackErr)
+				continue
 			}
 
-			handler(body)
+			ackType := handler(body)
+			switch ackType {
+			case Ack:
+				ackErr = delivery.Ack(false)
+				fmt.Println("sending ack")
+			case NackRequeue:
+				ackErr = delivery.Nack(false, true)
+				fmt.Println("sending nack requeue")
+			case NackDiscard:
+				ackErr = delivery.Nack(false, false)
+				fmt.Println("sending nack discard")
+			}
 
-			if err := delivery.Ack(false); err != nil {
-				log.Println("warning err in sub:", err)
+			if ackErr != nil {
+				log.Println("could not send ack type:", ackErr)
 			}
 		}
 	}()
